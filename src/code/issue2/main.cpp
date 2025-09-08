@@ -19,6 +19,8 @@
 #define TMA_SUPPORTED 0
 #endif
 
+const int ITER_NUM = 100;
+
 __global__ void lsu_copy_kernel(const float* src, float* dst, size_t n) {
     for (size_t i = blockIdx.x * blockDim.x + threadIdx.x; i < n; i += gridDim.x * blockDim.x) {
         dst[i] = src[i];
@@ -36,6 +38,36 @@ __global__ void lsu_vectorized_copy_kernel(const float* src, float* dst, size_t 
     }
 }
 
+__global__ void lsu_vectorized_smem_copy_kernel(const float* src, float* dst, size_t n) {
+    const float4* src_vec = reinterpret_cast<const float4*>(src);
+    float4* dst_vec = reinterpret_cast<float4*>(dst);
+    
+    extern __shared__ float4 smem_buffer[];
+    
+    size_t n_vec = n / 4;
+    
+    // 使用tile-based方式处理数据
+    for (size_t tile_start = blockIdx.x * blockDim.x; tile_start < n_vec; tile_start += gridDim.x * blockDim.x) {
+        size_t global_idx = tile_start + threadIdx.x;
+        
+        // Phase 1: 协作加载数据到shared memory
+        if (global_idx < n_vec) {
+            smem_buffer[threadIdx.x] = src_vec[global_idx];
+        }
+        
+        // 同步确保所有数据加载完成
+        __syncthreads();
+        
+        // Phase 2: 从shared memory写回到global memory
+        if (global_idx < n_vec) {
+            dst_vec[global_idx] = smem_buffer[threadIdx.x];
+        }
+        
+        // 同步确保写操作完成后再进行下一轮
+        __syncthreads();
+    }
+}
+
 // TMA核函数 - 仅在Hopper+架构上可用
 #if TMA_SUPPORTED && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900
 __global__ void tma_copy_kernel(const float* d_src, float* d_dst, size_t n) {
@@ -49,6 +81,7 @@ __global__ void tma_copy_kernel(const float* d_src, float* d_dst, size_t n) {
     __shared__ cuda::barrier<cuda::thread_scope_block> barrier;
     if (threadIdx.x == 0) {
         init(&barrier, block.size());
+        cuda::device::experimental::fence_proxy_async_shared_cta();
     }
     block.sync();
     
@@ -67,7 +100,7 @@ __global__ void tma_copy_kernel(const float* d_src, float* d_dst, size_t n) {
                              barrier);
         }
         
-        // 等待异步复制完成
+        // // 等待异步复制完成
         barrier.arrive_and_wait();
         
         // 写回全局内存
@@ -135,6 +168,41 @@ double benchmark_lsu_vectorized(const float* d_src, float* d_dst, size_t n, int 
     cudaEventRecord(start);
     for (int i = 0; i < iterations; i++) {
         lsu_vectorized_copy_kernel<<<blocks_per_grid, threads_per_block>>>(d_src, d_dst, n);
+    }
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return milliseconds / iterations;
+}
+
+double benchmark_lsu_vectorized_smem(const float* d_src, float* d_dst, size_t n, int iterations = 100) {
+    if (n % 4 != 0) return -1; // 不支持
+
+    int threads_per_block = 256;
+    int blocks_per_grid = ((n / 4) + threads_per_block - 1) / threads_per_block;
+    
+    // 计算动态shared memory大小
+    size_t smem_size = threads_per_block * sizeof(float4);
+
+    // 预热
+    for (int i = 0; i < 3; i++) {
+        lsu_vectorized_smem_copy_kernel<<<blocks_per_grid, threads_per_block, smem_size>>>(d_src, d_dst, n);
+    }
+    cudaDeviceSynchronize();
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+    for (int i = 0; i < iterations; i++) {
+        lsu_vectorized_smem_copy_kernel<<<blocks_per_grid, threads_per_block, smem_size>>>(d_src, d_dst, n);
     }
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -246,8 +314,8 @@ void run_performance_benchmark() {
     };
     int num_sizes = sizeof(message_sizes) / sizeof(message_sizes[0]);
 
-    printf("Message Size\tLSU Scalar\tLSU Vector\tCE Async\tTMA\t\tBandwidth(GB/s)\n");
-    printf("           \t(ms)     \t(ms)     \t(ms)    \t(ms)\t\t(Best)     \n");
+    printf("Message Size\tLSU Scalar\tLSU Vector\tLSU Vec+SMem\tCE Async\tTMA\t\tBandwidth(GB/s)\n");
+    printf("           \t(ms)     \t(ms)     \t(ms)       \t(ms)    \t(ms)\t\t(Best)     \n");
     printf("--------------------------------------------------------------------------------\n");
 
     for (int i = 0; i < num_sizes; i++) {
@@ -295,17 +363,19 @@ void run_performance_benchmark() {
             }
         }
 
-        int iterations = 100;
+        int iterations = ITER_NUM;
 
         // 运行基准测试
         double lsu_scalar_time = benchmark_lsu_scalar(d_src, d_dst, n, iterations);
         double lsu_vector_time = (n % 4 == 0) ? benchmark_lsu_vectorized(d_src, d_dst, n, iterations) : -1;
+        double lsu_vector_smem_time = (n % 4 == 0) ? benchmark_lsu_vectorized_smem(d_src, d_dst, n, iterations) : -1;
         double ce_async_time = benchmark_ce_async(d_src, d_dst, n, iterations);
         double tma_time = benchmark_tma(d_src, d_dst, n, iterations);
 
         // 找到最佳时间
         double best_time = lsu_scalar_time;
         if (lsu_vector_time > 0 && lsu_vector_time < best_time) best_time = lsu_vector_time;
+        if (lsu_vector_smem_time > 0 && lsu_vector_smem_time < best_time) best_time = lsu_vector_smem_time;
         if (ce_async_time < best_time) best_time = ce_async_time;
         if (tma_time > 0 && tma_time < best_time) best_time = tma_time;
         
@@ -315,6 +385,11 @@ void run_performance_benchmark() {
         printf("%s\t\t%.3f\t\t", message_sizes[i].label, lsu_scalar_time);
         if (lsu_vector_time > 0) {
             printf("%.3f\t\t", lsu_vector_time);
+        } else {
+            printf("N/A\t\t");
+        }
+        if (lsu_vector_smem_time > 0) {
+            printf("%.3f\t\t", lsu_vector_smem_time);
         } else {
             printf("N/A\t\t");
         }
