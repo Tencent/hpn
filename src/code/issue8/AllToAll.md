@@ -58,13 +58,21 @@ nvshmemi_transfer_put_signal<NVSHMEMI_THREADGROUP_THREAD>
 - G：由网络物理带宽决定
 
 AllToAll操作需要每个PE向其他P-1个PE发送消息，每次传输的数据总大小为n。由于CPU代理的串行瓶颈，它必须一个接一个处理P-1个发送请求。
+
+
 $$
-T_{alltoall\_IBRC} \approx L+2\times o_{IBRC}+\frac{M}{G}
+T_{IBRC} \approx L+2\times o_{IBRC}+\frac{M}{G}
 $$
+
+
 其中，
+
+
 $$
 M=(P-1) \times n
 $$
+
+
 
 ## IBRC各步骤耗时
 
@@ -78,20 +86,25 @@ $$
    - 通过volatile 64位内存写入，将指令包传给环形队列
    
    该部分耗时主要在GPU上的原子操作、内存读写以及可能的自旋等待组成，在环形队列未满时，耗时较短且相对固定。
+   
+   
    $$
-   T_{GPU}=T_{atomicAdd}+T_{flow\_control}+T_{build\_packets}
+   T_{GPU}=T_{atomicAdd}+T_{flowControl}+T_{buildPackets}
    $$
    
-2. GPU与CPU的切换，包括通信延迟与唤醒延迟（$T_{sync\_wakeup}$）
+   
+2. GPU与CPU的切换，包括通信延迟与唤醒延迟（$T_{syncWakeup}$）
 
    - GPU需要通过__threadfence()确保其写入的指令对CPU可见，且GPU需要通过PCIE向主机内存中写入指令
    - 内核调度器唤醒CPU Proxy，涉及到一次上下文切换
 
+   
    $$
-   T_{sync\_wakeup}=T_{GPU\_fence}+T_{PCIE}+T_{os\_shedule}
+   T_{syncWakeup}=T_{GPUFence}+T_{PCIe}+T_{shedule}
    $$
+   
 
-3. CPU端指令处理（$T_{CPU\_proxy}$）
+3. CPU端指令处理（$T_{CPUproxy}$）
 
    CPU Proxy中process_channel_dma函数所做的工作
 
@@ -99,9 +112,12 @@ $$
    - 之后提交传输操作，通过nvshmemi_process_multisend_rma执行具体的网络传输
 
    该部分耗时主要是同步开销。
+
+   
    $$
-   T_{CPU\_proxy}=T_{spin\_wait}+T_{CPU\_{fence}}
+   T_{CPUproxy}=T_{spinWait}+T_{CPUfence}
    $$
+   
 
 4. 网络传输（$T_{Network}$） 
 
@@ -113,9 +129,13 @@ $$
    - Ringing the Doorbell，启动DMA传输
 
    该部分即LogGP的主体部分
+
+   
    $$
    T_{Network}=T_{lib}+L+\frac{M}{G}
    $$
+   
+
    其中$T_{lib}$是调用网络库函数的开销
 
 因此，对于小消息而言，其总延迟有很大程度上受到前三个阶段的影响，特别是CPU Proxy对于指令的串行执行与上下文切换，导致其瓶颈主要在CPU端，带宽难以充分利用。而大消息因其单次指令传输数据大，主要瓶颈在带宽方面，故其对带宽的利用率较高，与IBGDA类似。
@@ -137,14 +157,22 @@ $$
 在IBGDA中，发起通信的处理器是GPU，由其SM直接向NIC发送指令。
 
 - L：不变，由物理网络决定
+
 - o：比较低，发送开销仅包括GPU构造几条指令来构建WQE，并”按响门铃“（一次MMIO写操作）的时间。
+
 - G：同样由网络物理带宽决定
 
+  
+
 $$
-T_{alltoall\_IBGDA} \approx L+2\times o_{IBGDA}+\frac{M}{G}
+T_{IBGDA} \approx L+2\times o_{IBGDA}+\frac{M}{G}
 $$
 
+
+
 其中，
+
+
 $$
 M=(P-1) \times n
 $$
