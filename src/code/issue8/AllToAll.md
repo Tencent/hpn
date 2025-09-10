@@ -14,6 +14,7 @@ LogGP的五个参数：
 LogGP模型的通信延迟公式为：
 
 
+
 $$
 T=L+2\times{o}+\frac{n}{G}
 $$
@@ -60,12 +61,15 @@ nvshmemi_transfer_put_signal<NVSHMEMI_THREADGROUP_THREAD>
 AllToAll操作需要每个PE向其他P-1个PE发送消息，每次传输的数据总大小为n。由于CPU代理的串行瓶颈，它必须一个接一个处理P-1个发送请求。
 
 
+
 $$
 T_{IBRC} \approx L+2\times o_{IBRC}+\frac{M}{G}
 $$
 
 
+
 其中，
+
 
 
 $$
@@ -76,67 +80,71 @@ $$
 
 ## IBRC各步骤耗时
 
-1. GPU端进行指令的生成与提交（\(T_{GPU}\(）
+1. GPU端进行指令的生成与提交( $T_{GPU}$ ）
 
-   GPU Kernel中transfer_dma所做的工作，包括：
-   
-   - 通过atomicAdd在环形队列中预留空间
-   - 执行check_channel_availability进行流控，请求过多时可能会导致等待
-   - 利用位运算，将PUT操作的详细信息（如远程地址的roffset、操作类型、group_size、标志位flag、laddr、size等），注意构建了4个8字节的指令包
-   - 通过volatile 64位内存写入，将指令包传给环形队列
-   
-   该部分耗时主要在GPU上的原子操作、内存读写以及可能的自旋等待组成，在环形队列未满时，耗时较短且相对固定。
-   
-   
-   $$
-   T_{GPU}=T_{atomicAdd}+T_{flowControl}+T_{buildPackets}
-   $$
-   
-   
-2. GPU与CPU的切换，包括通信延迟与唤醒延迟（$T_{syncWakeup}$）
+GPU Kernel中transfer_dma所做的工作，包括：
 
-   - GPU需要通过__threadfence()确保其写入的指令对CPU可见，且GPU需要通过PCIE向主机内存中写入指令
-   - 内核调度器唤醒CPU Proxy，涉及到一次上下文切换
+- 通过atomicAdd在环形队列中预留空间
+- 执行check_channel_availability进行流控，请求过多时可能会导致等待
+- 利用位运算，将PUT操作的详细信息（如远程地址的roffset、操作类型、group_size、标志位flag、laddr、size等），注意构建了4个8字节的指令包
+- 通过volatile 64位内存写入，将指令包传给环形队列
 
-   
-   $$
-   T_{syncWakeup}=T_{GPUFence}+T_{PCIe}+T_{shedule}
-   $$
-   
+该部分耗时主要在GPU上的原子操作、内存读写以及可能的自旋等待组成，在环形队列未满时，耗时较短且相对固定。
 
-3. CPU端指令处理（$T_{CPUproxy}$）
 
-   CPU Proxy中process_channel_dma函数所做的工作
+$$
+T_{GPU}=T_{atomicAdd}+T_{flowControl}+T_{buildPackets}
+$$
 
-   - 读取并等待上面四个指令，其中会用到__sync_synchronize()这个内存栅栏，有较大的时间开销。在这一阶段能够重组获得laddr、size、pe、op、rptr
-   - 之后提交传输操作，通过nvshmemi_process_multisend_rma执行具体的网络传输
 
-   该部分耗时主要是同步开销。
+2. GPU与CPU的切换，包括通信延迟与唤醒延迟（ $T_{syncWakeup}$ ）
 
-   
-   $$
-   T_{CPUproxy}=T_{spinWait}+T_{CPUfence}
-   $$
-   
+- GPU需要通过__threadfence()确保其写入的指令对CPU可见，且GPU需要通过PCIE向主机内存中写入指令
+- 内核调度器唤醒CPU Proxy，涉及到一次上下文切换
 
-4. 网络传输（$T_{Network}$） 
 
-   这部分由`nvshmemi_process_multisend_rma` 函数及其调用的底层网络库（如 `libibverbs`）所做的工作。
 
-   - 进行内存注册，获取内存密钥lkey/rkey
-   - 根据数据大小决定是否进行数据分块
-   - 调用网络库API，由库函数创建WQE
-   - Ringing the Doorbell，启动DMA传输
+$$
+T_{syncWakeup}=T_{GPUFence}+T_{PCIe}+T_{shedule}
+$$
 
-   该部分即LogGP的主体部分
 
-   
-   $$
-   T_{Network}=T_{lib}+L+\frac{M}{G}
-   $$
-   
+3. CPU端指令处理（ $T_{CPUproxy}$ ）
 
-   其中$T_{lib}$是调用网络库函数的开销
+CPU Proxy中process_channel_dma函数所做的工作
+
+- 读取并等待上面四个指令，其中会用到__sync_synchronize()这个内存栅栏，有较大的时间开销。在这一阶段能够重组获得laddr、size、pe、op、rptr
+- 之后提交传输操作，通过nvshmemi_process_multisend_rma执行具体的网络传输
+
+该部分耗时主要是同步开销。
+
+
+
+$$
+T_{CPUproxy}=T_{spinWait}+T_{CPUfence}
+$$
+
+
+4. 网络传输（ $T_{Network}$ ） 
+
+这部分由`nvshmemi_process_multisend_rma` 函数及其调用的底层网络库（如 `libibverbs`）所做的工作。
+
+- 进行内存注册，获取内存密钥lkey/rkey
+- 根据数据大小决定是否进行数据分块
+- 调用网络库API，由库函数创建WQE
+- Ringing the Doorbell，启动DMA传输
+
+该部分即LogGP的主体部分
+
+
+
+$$
+T_{Network}=T_{lib}+L+\frac{M}{G}
+$$
+
+
+
+其中$T_{lib}$是调用网络库函数的开销
 
 因此，对于小消息而言，其总延迟有很大程度上受到前三个阶段的影响，特别是CPU Proxy对于指令的串行执行与上下文切换，导致其瓶颈主要在CPU端，带宽难以充分利用。而大消息因其单次指令传输数据大，主要瓶颈在带宽方面，故其对带宽的利用率较高，与IBGDA类似。
 
@@ -149,9 +157,12 @@ $$
 ## Thread
 
 1. 该线程独自调用ibgda_get_qp()获取与目标PE通信的QP，调用ibgda_get_lkey/ibgda_raddr_rkey获取本地和远程内存的内存密钥，并确定这些密钥能覆盖的最大数据范围
+
 2. 根据传输的数据量和密钥的覆盖范围，决定是采取方案1还是方案2。
-   - 方案1：当全部数据可以一次性完整传输时，调用ibgda_reserve_wqe_slots在网卡命令队列中预留所需的所有WQE槽位，并依次写入PUT和Signal的WQE，最后调用ibgda_submit_requests通知网卡开始工作。
-   - 方案2：当数据总量超过了单次传输上限时，对数据进行分块，通过循环，按照“获取当前块密钥、预留WQE、写入WQE、提交”的顺序执行，直到将所有数据块都传输完毕。
+
+- 方案1：当全部数据可以一次性完整传输时，调用ibgda_reserve_wqe_slots在网卡命令队列中预留所需的所有WQE槽位，并依次写入PUT和Signal的WQE，最后调用ibgda_submit_requests通知网卡开始工作。
+- 方案2：当数据总量超过了单次传输上限时，对数据进行分块，通过循环，按照“获取当前块密钥、预留WQE、写入WQE、提交”的顺序执行，直到将所有数据块都传输完毕。
+
 3. 如果不是非阻塞式的，则调用ibgda_quiet，等待网卡确认所有任务完成，GPU不断轮询CQ来判断传输是否完成。
 
 在IBGDA中，发起通信的处理器是GPU，由其SM直接向NIC发送指令。
@@ -164,6 +175,7 @@ $$
 
   
 
+
 $$
 T_{IBGDA} \approx L+2\times o_{IBGDA}+\frac{M}{G}
 $$
@@ -171,6 +183,7 @@ $$
 
 
 其中，
+
 
 
 $$
