@@ -12,9 +12,13 @@ LogGP的五个参数：
 - n 是消息的总大小（字节数）
 
 LogGP模型的通信延迟公式为：
+
+
 $$
 T=L+2\times{o}+\frac{n}{G}
 $$
+
+
 
 # NVSHMEM的AllToAll Kernel
 
@@ -64,7 +68,7 @@ $$
 
 ## IBRC各步骤耗时
 
-1. GPU端进行指令的生成与提交（$T_{GPU}$）
+1. GPU端进行指令的生成与提交（\(T_{GPU}\(）
 
    GPU Kernel中transfer_dma所做的工作，包括：
    
