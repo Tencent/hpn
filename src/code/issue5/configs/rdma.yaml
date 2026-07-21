@@ -1,0 +1,47 @@
+# =============================================================================
+# Issue5 RDMA (RoCEv2) 传输配置
+# -----------------------------------------------------------------------------
+# Mooncake transfer engine 的 RDMA 协议档。相对 tcp.yaml 的**唯一实现改动**就是
+# protocol 切成 rdma + 指定 RDMA NIC(device_name), 其余端口/段大小不变。
+# store 端与 client 端 protocol 必须一致。被 scripts/run_benchmark.sh 读取。
+#
+# device→netdev 映射两机不一致:
+#   RDMA 数据 NIC = eth1(198.51.100.x/27 子网)
+#   kvstore: eth1 = mlx5_2; prefill: eth1 = mlx5_3
+# =============================================================================
+
+transport: rdma                # Mooncake protocol = rdma (RoCEv2, verbs, 零拷贝直 DMA)
+
+# ---- store 端 (kvstore pod, MC_PROTOCOL=rdma bash start_kvstore.sh) ----
+store:
+  protocol: rdma
+  device_name: ""              # store 侧自动发现 OK (Topology discovery: Found 6 HCAs)
+  auto_discovery: true         # MC_MS_AUTO_DISC=1
+  global_segment_size: 200gb
+  local_buffer_size: 0
+  metadata_port: 18080         # 握手/元数据走已放通端口; RDMA 数据面另走 verbs
+  store_port: 18081
+  master_rpc_port: 50051
+  te_port: 15964               # transfer engine 端口 (跨机安全组白名单内)
+
+# ---- client 端 (prefill pod, TRANSPORT=rdma MC_DEVICE=mlx5_3 ...) ----
+client:
+  protocol: rdma
+  device_name: mlx5_3          # 必填: prefill 的 eth1(RDMA NIC)=mlx5_3; 空会 No available RNIC
+  local_buffer_size_gb: 6
+  global_segment_size: 0
+
+# ---- RDMA 硬件事实 (doc/步骤1-rdma.md 实测, 非假设) ----
+hardware:
+  link_layer: Ethernet         # RoCEv2 (非 IB)
+  gid_index: 3                 # RoCEv2 gid=3, MTU 4096
+  hca_count: {kvstore: 6, prefill: 7}
+  rdma_subnet: {kvstore: "198.51.100.0/27", prefill: "198.51.100.32/27"}  # 不同 /27, RoCEv2 可路由
+  peermem: kunlun_peermem      # 支持 GPUDirect RDMA (XPU 显存直通)
+  loopback_ib_write_bw_gbps: 18.3   # 146.73 Gb/s @ 65536B, gid3, 证明 verbs 全链路健康
+
+# ---- 期望性能量级 (来自 L1/L2 实测) ----
+expect:
+  l1_put_gbps: "4.9 - 16.0"    # 随并发 scale, transfer_rdma.csv (~13.9x TCP)
+  l1_get_gbps: "1.5 - 2.1"     # simple-API get 卡在 client python bytes 拷贝(非网络)
+  l2_zerocopy_get_gbps: "20.68" # ★ kv_tensor_rdma.csv zerocopy get 中位, ~18.8x TCP-zc

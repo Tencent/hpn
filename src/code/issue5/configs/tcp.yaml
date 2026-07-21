@@ -1,0 +1,32 @@
+# =============================================================================
+# Issue5 TCP 传输配置 (基线)
+# -----------------------------------------------------------------------------
+# Mooncake transfer engine 的 TCP 协议档。store 端与 client 端的 protocol 必须一致。
+# 被 scripts/run_benchmark.sh 读取, 落成 store 的 --config JSON 与 client 的
+# TRANSPORT/MC_DEVICE 环境变量。字节级值(如 segment)由脚本换算。
+# =============================================================================
+
+transport: tcp                 # Mooncake protocol = tcp (走内核 socket, 无 verbs)
+
+# ---- store 端 (kvstore pod, MC_PROTOCOL=tcp bash start_kvstore.sh) ----
+store:
+  protocol: tcp
+  device_name: ""              # TCP 不用 RDMA NIC, 留空
+  global_segment_size: 200gb   # 贡献给全局 KV 池的本机内存
+  local_buffer_size: 0         # 纯存储节点不发起 get/put
+  metadata_port: 18080         # http metadata (8080 常被同宿主机其它 hostNetwork pod 占)
+  store_port: 18081
+  master_rpc_port: 50051
+
+# ---- client 端 (prefill pod 内跑 benchmark, 跨机连 store) ----
+client:
+  protocol: tcp
+  device_name: ""              # TCP client 无需指定网卡
+  local_buffer_size_gb: 6      # bytes 路径需 >= 单次 kv_bytes (128k=4GB)
+  global_segment_size: 0       # client 不贡献内存
+
+# ---- 期望性能量级 (来自 L1/L2 实测, 仅作 sanity, 非硬编码) ----
+expect:
+  l1_put_gbps: "0.77 - 2.88"   # 随并发, transfer_tcp.csv
+  l1_get_gbps: "0.52 - 0.94"   # 卡在内核 socket 拷贝
+  l2_zerocopy_get_gbps: "1.10" # kv_tensor_tcp.csv zerocopy get 中位
