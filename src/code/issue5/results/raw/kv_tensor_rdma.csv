@@ -1,0 +1,13 @@
+transport,model,path,op,context,tp,page_size,num_pages,num_keys,kv_bytes,kv_size,iters,transfer_ms,effective_bandwidth_gbps,max_abs_error,success
+rdma,qwen3-32b,bytes,put,8192,8,64,128,256,268435456,256MB,5,93.054,2.687,,1
+rdma,qwen3-32b,bytes,get,8192,8,64,128,256,268435456,256MB,5,107.556,2.324,0.0,1
+rdma,qwen3-32b,zerocopy,put,8192,8,64,128,256,268435456,256MB,5,11.893,21.021,,1
+rdma,qwen3-32b,zerocopy,get,8192,8,64,128,256,268435456,256MB,5,12.197,20.497,0.0,1
+rdma,qwen3-32b,bytes,put,32768,8,64,512,1024,1073741824,1.0GB,5,320.343,3.122,,1
+rdma,qwen3-32b,bytes,get,32768,8,64,512,1024,1073741824,1.0GB,5,257.4,3.885,0.0,1
+rdma,qwen3-32b,zerocopy,put,32768,8,64,512,1024,1073741824,1.0GB,5,49.273,20.295,,1
+rdma,qwen3-32b,zerocopy,get,32768,8,64,512,1024,1073741824,1.0GB,5,47.461,21.07,0.0,1
+rdma,qwen3-32b,bytes,put,131072,8,64,2048,4096,4294967296,4.0GB,5,1020.6,3.92,,1
+rdma,qwen3-32b,bytes,get,131072,8,64,2048,4096,4294967296,4.0GB,5,962.0,4.16,0.0,1
+rdma,qwen3-32b,zerocopy,put,131072,8,64,2048,4096,4294967296,4.0GB,5,202.36,19.767,,1
+rdma,qwen3-32b,zerocopy,get,131072,8,64,2048,4096,4294967296,4.0GB,5,193.394,20.683,0.0,1

@@ -1,0 +1,174 @@
+apiVersion: example.com/v1
+kind: FedDeployment
+metadata:
+  labels:
+    example.com/managed-by: deploytask
+    example.com/feddeploy-name: issue5-prefill-by-fed-deploy
+    example.com/inference-service-name: issue5-prefill-by-fed-deploy
+    example.com/model-name: issue5-model
+    example.com/platform: TEST
+  name: issue5-prefill-hicache
+  namespace: default
+spec:
+  minReadySeconds: 30
+  replicas: 1
+  selector:
+    matchLabels:
+      example.com/feddeploy-name: issue5-prefill-by-fed-deploy
+      example.com/inference-service-name: issue5-prefill-by-fed-deploy
+      example.com/model-name: issue5-model
+      example.com/platform: TEST
+  strategy:
+    canary:
+      maxSurge: 100%
+      maxUnavailable: 100%
+      steps:
+      - pause: {}
+        setWeight: 100
+  template:
+    metadata:
+      annotations:
+        example.com/update-by-job: "0"
+
+      labels:
+        example.com/feddeploy-name: issue5-prefill-by-fed-deploy
+        example.com/inference-service-name: issue5-prefill-by-fed-deploy
+        example.com/model-name: issue5-model
+        example.com/platform: TEST
+    spec:
+      replicas: 1
+      template:
+        metadata:
+          labels:
+            example.com/feddeploy-name: issue5-prefill-by-fed-deploy
+            example.com/inference-service-name: issue5-prefill-by-fed-deploy
+            example.com/model-name: issue5-model
+            example.com/platform: TEST
+          annotations:
+            scheduling.volcano.sh/queue-name: <volcano-queue>
+        spec:
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                    - 192.0.2.101
+                    - 192.0.2.102
+                    - 192.0.2.103
+                    - 192.0.2.104
+                    - 192.0.2.105
+                    - 192.0.2.106
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                    - key: rdma-test
+                      operator: In
+                      values:
+                        - "true"
+                  topologyKey: "kubernetes.io/hostname"
+ 
+          containers:
+            # 容器只拉起并 idle, 不在启动时跑 server。
+            # 因为里面有需要运行时才能确定的参数(存储节点宿主机 IP 等),
+            # 实际启动逻辑放在 scripts/start_prefill.sh, 进 pod 后手动执行:
+            #   kubectl exec -it <pod> -- bash
+            #   # 把 scripts/start_prefill.sh 拷进 /mnt/cluster 或直接粘贴执行
+            #   MOONCAKE_STORAGE_NODE_IP=<存储节点IP> MC_PROTOCOL=rdma bash /mnt/cluster/issue5/start_prefill.sh
+          - args:
+            - -c
+            - |
+              . ~/.bashrc
+              echo "[issue5-prefill] Pod ready. Exec in and run scripts/start_prefill.sh manually."
+              tail -f /dev/null
+            command:
+            - /bin/sh
+            # 容器只 idle, 模型实际启动由 scripts/start_prefill_v32.sh 手动执行,
+            # 该脚本会 export 自己需要的全部 env(甚至覆盖 pod 值), 故此处不再重复注入
+            # sglang/MoE/kunlun 调优变量, 仅保留 downward-API pod 元信息, 方便 exec 进 pod 调试。
+            env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            image: inference-sglang:<image-tag>
+            imagePullPolicy: IfNotPresent
+            lifecycle:
+              preStop:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    mkdir -p /run/sglang && \
+                    echo "stop" > /run/sglang/stop && \
+                    sleep 120 && \
+                    pkill -9 -f '(sgl|python3)'
+            name: model-server
+            ports:
+            - containerPort: 6677
+              protocol: TCP
+            - containerPort: 8000
+              protocol: TCP
+            resources:
+              limits:
+                kunlunxin.com/xpu: "8"  
+                rdma/hca: "1"
+              requests:
+                kunlunxin.com/xpu: "8"  
+                rdma/hca: "1"
+            securityContext:
+              capabilities:
+                add:
+                - SYS_PTRACE
+                - SYS_ADMIN
+              runAsUser: 0
+            volumeMounts:
+            - mountPath: /dev/shm
+              name: shm-cache
+            - mountPath: /mnt/cluster
+              name: pvc-model
+          dnsPolicy: ClusterFirst
+          hostNetwork: true
+          nodeSelector:
+            example.com/dedicated-pool: <dedicated-pool>
+          restartPolicy: Always
+          schedulerName: volcano
+          securityContext: {}
+          shareProcessNamespace: true
+          terminationGracePeriodSeconds: 600
+          volumes:
+          - emptyDir:
+              medium: Memory
+              sizeLimit: 32Gi
+            name: local-cache
+          - emptyDir:
+              medium: Memory
+              sizeLimit: 800Gi
+            name: shm-cache
+          - emptyDir: {}
+            name: shared-volume
+          - name: pvc-model
+            persistentVolumeClaim:
+              claimName: model-pvc
+      # topologyKey: example.com/dcn-tor
+      # topologyKeyExclusive: true

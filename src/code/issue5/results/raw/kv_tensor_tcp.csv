@@ -1,0 +1,13 @@
+transport,model,path,op,context,tp,page_size,num_pages,num_keys,kv_bytes,kv_size,iters,transfer_ms,effective_bandwidth_gbps,max_abs_error,success
+tcp,qwen3-32b,bytes,put,8192,8,64,128,256,268435456,256MB,5,342.811,0.729,,1
+tcp,qwen3-32b,bytes,get,8192,8,64,128,256,268435456,256MB,5,295.74,0.845,0.0,1
+tcp,qwen3-32b,zerocopy,put,8192,8,64,128,256,268435456,256MB,5,233.864,1.069,,1
+tcp,qwen3-32b,zerocopy,get,8192,8,64,128,256,268435456,256MB,5,226.193,1.105,0.0,1
+tcp,qwen3-32b,bytes,put,32768,8,64,512,1024,1073741824,1.0GB,5,1273.358,0.785,,1
+tcp,qwen3-32b,bytes,get,32768,8,64,512,1024,1073741824,1.0GB,5,1439.864,0.695,0.0,1
+tcp,qwen3-32b,zerocopy,put,32768,8,64,512,1024,1073741824,1.0GB,5,1072.737,0.932,,1
+tcp,qwen3-32b,zerocopy,get,32768,8,64,512,1024,1073741824,1.0GB,5,913.954,1.094,0.0,1
+tcp,qwen3-32b,bytes,put,131072,8,64,2048,4096,4294967296,4.0GB,5,5173.846,0.773,,1
+tcp,qwen3-32b,bytes,get,131072,8,64,2048,4096,4294967296,4.0GB,5,4840.868,0.826,0.0,1
+tcp,qwen3-32b,zerocopy,put,131072,8,64,2048,4096,4294967296,4.0GB,5,3980.428,1.005,,1
+tcp,qwen3-32b,zerocopy,get,131072,8,64,2048,4096,4294967296,4.0GB,5,3404.958,1.175,0.0,1

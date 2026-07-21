@@ -1,0 +1,13 @@
+transport,model,path,op,context,tp,page_size,num_pages,num_keys,kv_bytes,kv_size,iters,transfer_ms,effective_bandwidth_gbps,max_abs_error,success
+tcp,deepseek-v32,bytes,put,8192,8,64,128,128,575668224,549MB,5,623.595,0.86,,1
+tcp,deepseek-v32,bytes,get,8192,8,64,128,128,575668224,549MB,5,791.541,0.677,0.0,1
+tcp,deepseek-v32,zerocopy,put,8192,8,64,128,128,575668224,549MB,5,452.819,1.184,,1
+tcp,deepseek-v32,zerocopy,get,8192,8,64,128,128,575668224,549MB,5,460.377,1.165,0.0,1
+tcp,deepseek-v32,bytes,put,32768,8,64,512,512,2302672896,2.1GB,5,3541.427,0.606,,1
+tcp,deepseek-v32,bytes,get,32768,8,64,512,512,2302672896,2.1GB,5,2648.839,0.81,0.0,1
+tcp,deepseek-v32,zerocopy,put,32768,8,64,512,512,2302672896,2.1GB,5,1984.112,1.081,,1
+tcp,deepseek-v32,zerocopy,get,32768,8,64,512,512,2302672896,2.1GB,5,1754.665,1.222,0.0,1
+tcp,deepseek-v32,bytes,put,131072,8,64,2048,2048,9210691584,8.6GB,5,8382.252,1.023,,1
+tcp,deepseek-v32,bytes,get,131072,8,64,2048,2048,9210691584,8.6GB,5,10357.485,0.828,0.0,1
+tcp,deepseek-v32,zerocopy,put,131072,8,64,2048,2048,9210691584,8.6GB,5,8221.086,1.043,,1
+tcp,deepseek-v32,zerocopy,get,131072,8,64,2048,2048,9210691584,8.6GB,5,7194.248,1.192,0.0,1

@@ -1,0 +1,13 @@
+transport,model,path,op,context,tp,page_size,num_pages,num_keys,kv_bytes,kv_size,iters,transfer_ms,effective_bandwidth_gbps,max_abs_error,success
+rdma,deepseek-v32,bytes,put,8192,8,64,128,128,575668224,549MB,5,77.2,6.945,,1
+rdma,deepseek-v32,bytes,get,8192,8,64,128,128,575668224,549MB,5,203.946,2.629,0.0,1
+rdma,deepseek-v32,zerocopy,put,8192,8,64,128,128,575668224,549MB,5,24.649,21.751,,1
+rdma,deepseek-v32,zerocopy,get,8192,8,64,128,128,575668224,549MB,5,31.016,17.286,0.0,1
+rdma,deepseek-v32,bytes,put,32768,8,64,512,512,2302672896,2.1GB,5,305.875,7.011,,1
+rdma,deepseek-v32,bytes,get,32768,8,64,512,512,2302672896,2.1GB,5,291.117,7.367,0.0,1
+rdma,deepseek-v32,zerocopy,put,32768,8,64,512,512,2302672896,2.1GB,5,99.534,21.546,,1
+rdma,deepseek-v32,zerocopy,get,32768,8,64,512,512,2302672896,2.1GB,5,104.572,20.508,0.0,1
+rdma,deepseek-v32,bytes,put,131072,8,64,2048,2048,9210691584,8.6GB,5,1877.866,4.568,,1
+rdma,deepseek-v32,bytes,get,131072,8,64,2048,2048,9210691584,8.6GB,5,1230.088,6.974,0.0,1
+rdma,deepseek-v32,zerocopy,put,131072,8,64,2048,2048,9210691584,8.6GB,5,390.708,21.955,,1
+rdma,deepseek-v32,zerocopy,get,131072,8,64,2048,2048,9210691584,8.6GB,5,404.963,21.182,0.0,1
