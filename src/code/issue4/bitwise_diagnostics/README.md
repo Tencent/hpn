@@ -43,6 +43,13 @@ detected, and non-zero on invalid configuration or launch failure. Use
 `--keep-payloads` when forensic inspection is needed; otherwise multi-MB raw
 captures are deleted after `report.json` is written.
 
+Existing captures can also be compared offline (including captures copied
+from different nodes):
+
+```bash
+python core.py run-a.json run-b.json --output comparison.json
+```
+
 Run CPU-only unit tests with:
 
 ```bash

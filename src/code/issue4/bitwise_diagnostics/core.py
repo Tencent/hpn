@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
@@ -163,3 +164,21 @@ def compare_runs(run_paths: Iterable[Path]) -> dict[str, Any]:
         "first_divergence": asdict(first) if first else None,
         "differences": [asdict(item) for item in differences],
     }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Compare existing NCCL capture files")
+    parser.add_argument("captures", type=Path, nargs="+")
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    report = compare_runs(args.captures)
+    rendered = json.dumps(report, indent=2)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
+    print(rendered)
+    return 0 if report["bitwise_identical"] else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
