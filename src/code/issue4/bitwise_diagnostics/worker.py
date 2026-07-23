@@ -42,6 +42,11 @@ def main() -> None:
 
     torch.cuda.set_device(local_rank)
     dist.init_process_group("nccl", device_id=torch.device("cuda", local_rank))
+    # Keep capture transport off NCCL. A forced NCCL_ALGO may be valid for the
+    # collective under test but invalid for gather_object's internal AllGather
+    # (for example, Tree). A Gloo control group prevents that instrumentation
+    # traffic from changing or invalidating the experiment.
+    control_group = dist.new_group(backend="gloo")
     dtype = getattr(torch, args.dtype)
     generator = torch.Generator(device="cpu").manual_seed(args.seed + rank)
     source = torch.randn(args.elements, dtype=dtype, generator=generator).cuda(local_rank)
@@ -72,7 +77,7 @@ def main() -> None:
     gathered: list[list[dict[str, object]] | None] | None = (
         [None] * world_size if rank == 0 else None
     )
-    dist.gather_object(captures, gathered, dst=0)
+    dist.gather_object(captures, gathered, dst=0, group=control_group)
     if rank == 0:
         metadata = {
             "op": args.op,
@@ -104,6 +109,7 @@ def main() -> None:
             ),
             encoding="utf-8",
         )
+    dist.destroy_process_group(control_group)
     dist.destroy_process_group()
 
 
