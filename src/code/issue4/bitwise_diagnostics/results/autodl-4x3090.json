@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-23",
+  "environment": {
+    "gpu": "4 x NVIDIA GeForce RTX 3090 24 GiB",
+    "driver": "580.105.08",
+    "torch": "2.8.0+cu128",
+    "cuda": "12.8",
+    "nccl": "2.27.3",
+    "topology": {
+      "gpu0_gpu1": "PXB",
+      "gpu2_gpu3": "PXB",
+      "between_pairs": "SYS",
+      "numa_nodes": 2,
+      "nvlink": false
+    }
+  },
+  "same_config_results": {
+    "all_reduce_1mib": {
+      "runs_per_config": 5,
+      "calls_per_run": 20,
+      "world_size": 4,
+      "dtype": "float32",
+      "configs_tested": [
+        "default+default",
+        "default+Simple",
+        "default+LL",
+        "Ring+default",
+        "Ring+Simple",
+        "Ring+LL",
+        "Tree+default",
+        "Tree+Simple",
+        "Tree+LL"
+      ],
+      "bitwise_identical_configs": 9,
+      "divergent_configs": 0
+    },
+    "reduce_scatter_1mib_input": {
+      "runs_per_config": 5,
+      "calls_per_run": 20,
+      "world_size": 4,
+      "dtype": "float32",
+      "bitwise_identical_configs": [
+        "default+default",
+        "default+Simple",
+        "default+LL",
+        "Ring+default",
+        "Ring+Simple",
+        "Ring+LL"
+      ],
+      "unsupported_configs": [
+        "Tree+default",
+        "Tree+Simple",
+        "Tree+LL"
+      ],
+      "unsupported_error": "ncclInvalidUsage"
+    },
+    "all_reduce_granularity": [
+      {
+        "bytes_per_rank": 1024,
+        "runs": 5,
+        "calls_per_run": 50,
+        "bitwise_identical": true
+      },
+      {
+        "bytes_per_rank": 65536,
+        "runs": 5,
+        "calls_per_run": 30,
+        "bitwise_identical": true
+      },
+      {
+        "bytes_per_rank": 1048576,
+        "runs": 5,
+        "calls_per_run": 20,
+        "bitwise_identical": true
+      },
+      {
+        "bytes_per_rank": 16777216,
+        "runs": 5,
+        "calls_per_run": 3,
+        "bitwise_identical": true
+      }
+    ]
+  },
+  "controlled_algorithm_change": {
+    "baseline": "Ring",
+    "candidate": "Tree",
+    "op": "all_reduce",
+    "bytes_per_rank": 1048576,
+    "calls": 20,
+    "controlled_factors": "same seed, rank inputs, hardware, dtype and message size",
+    "bitwise_identical": false,
+    "first_divergence": {
+      "call": 0,
+      "rank": 0,
+      "first_byte": 24,
+      "first_element": 6,
+      "changed_bytes": 94656,
+      "changed_bits": 192767,
+      "max_abs_error": 9.5367431640625e-07,
+      "max_ulp_error": 49152,
+      "ring_sha256": "c5797c4ea5b9d3a387fab7d4e3a6405fa60f3397d19a050070e896433b99d513",
+      "tree_sha256": "3f3470571b53caf023710336ca21a493c7a27e27e40871280a5c85a44d44a991"
+    }
+  }
+}
