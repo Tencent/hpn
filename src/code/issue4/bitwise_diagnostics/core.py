@@ -155,7 +155,9 @@ def compare_runs(run_paths: Iterable[Path]) -> dict[str, Any]:
     first = min(differences, key=lambda item: (item.call, item.run, item.rank), default=None)
     return {
         "schema_version": SCHEMA_VERSION,
-        "metadata": baseline_meta,
+        # Preserve the complete measured environment in the report while only
+        # using workload-defining fields above to decide comparability.
+        "metadata": runs[0]["metadata"],
         "run_files": [str(path) for path in paths],
         "bitwise_identical": not differences,
         "first_divergence": asdict(first) if first else None,
