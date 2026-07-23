@@ -18,6 +18,10 @@ CUDA runtime, topology discovery, and actual communication path.
 No claim of determinism is inferred from an algorithm name. The report only
 describes the measured hardware/software configuration.
 
+See [`EXPERIMENT.md`](EXPERIMENT.md) for measured four-GPU results covering
+algorithm/protocol selection, message granularity, both collectives, and a
+controlled Ring-versus-Tree difference.
+
 ## Quick start
 
 ```bash
